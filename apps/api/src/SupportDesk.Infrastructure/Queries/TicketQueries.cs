@@ -17,13 +17,12 @@ namespace SupportDesk.Infrastructure.Queries;
 public sealed class TicketQueries(SupportDbContext db, IClock clock) : ITicketQueries
 {
     /// <remarks>
-    /// Sorts and pages every ticket. The filter values bound into <paramref name="query"/>
-    /// (search, status, priority, category, customer, agent, unassigned-only) are not applied
-    /// yet: server-side filtering is still to be built.
+    /// Filters in SQL first, then counts, sorts and pages, so <c>totalCount</c> matches the
+    /// filtered set. A further filter is one more clause in <see cref="ApplyFilters"/>.
     /// </remarks>
     public async Task<PagedResult<TicketListItemDto>> GetPagedAsync(TicketQuery query, CancellationToken ct)
     {
-        var tickets = TicketsWithLabels();
+        var tickets = ApplyFilters(TicketsWithLabels(), query);
 
         var totalCount = await tickets.CountAsync(ct);
 
@@ -116,6 +115,54 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock) : ITicketQu
         join category in db.Set<Category>() on ticket.CategoryId equals category.Id
         from agent in db.Set<Agent>().Where(a => a.Id == ticket.AssignedAgentId).DefaultIfEmpty()
         select new TicketWithLabels { Ticket = ticket, Customer = customer, Category = category, Agent = agent };
+
+    /// <summary>
+    /// Narrows the list to the supplied filters. Search terms are OR'd across title, reference
+    /// and customer name; every other filter is AND'd. Blank search is ignored.
+    /// </summary>
+    private static IQueryable<TicketWithLabels> ApplyFilters(IQueryable<TicketWithLabels> source, TicketQuery query)
+    {
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var term = query.Search.Trim().ToLowerInvariant();
+            source = source.Where(x =>
+                x.Ticket.Title.ToLower().Contains(term) ||
+                x.Ticket.Reference.ToLower().Contains(term) ||
+                x.Customer.Name.ToLower().Contains(term));
+        }
+
+        if (query.Status is { } status)
+        {
+            source = source.Where(x => x.Ticket.Status == status);
+        }
+
+        if (query.Priority is { } priority)
+        {
+            source = source.Where(x => x.Ticket.Priority == priority);
+        }
+
+        if (query.CategoryId is { } categoryId)
+        {
+            source = source.Where(x => x.Ticket.CategoryId == categoryId);
+        }
+
+        if (query.CustomerId is { } customerId)
+        {
+            source = source.Where(x => x.Ticket.CustomerId == customerId);
+        }
+
+        if (query.AssignedAgentId is { } assignedAgentId)
+        {
+            source = source.Where(x => x.Ticket.AssignedAgentId == assignedAgentId);
+        }
+
+        if (query.UnassignedOnly)
+        {
+            source = source.Where(x => x.Ticket.AssignedAgentId == null);
+        }
+
+        return source;
+    }
 
     private static IQueryable<TicketWithLabels> ApplySort(IQueryable<TicketWithLabels> source, TicketQuery query)
     {

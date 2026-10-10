@@ -6,8 +6,8 @@ namespace SupportDesk.Application.Contracts.Tickets;
 /// Filters, sorting and paging for the ticket list. Bound directly from the query string.
 /// </summary>
 /// <remarks>
-/// The web app already sends every filter below, but the API only sorts and pages so far: the
-/// filters are part of the contract and still have to be applied server-side.
+/// Bound from the query string and applied in SQL by the ticket list query: search, status,
+/// priority, category, customer, assigned agent and unassigned-only.
 /// </remarks>
 public sealed record TicketQuery
 {
