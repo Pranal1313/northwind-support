@@ -1,3 +1,4 @@
+
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ticketsApi } from '../../../api/tickets';
@@ -50,5 +51,28 @@ describe('useTicketList', () => {
 
     expect(result.current.isLoading).toBe(false);
     expect(result.current.data?.items).toHaveLength(1);
+  });
+
+  it('reloads tickets when the status filter changes', async () => {
+    const { result } = renderHook(() => useTicketList());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+    expect(getTickets).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.updateFilters({ status: 'Open' });
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+    expect(getTickets).toHaveBeenCalledTimes(2);
+    expect(getTickets).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'Open', page: 1 }),
+    );
   });
 });
