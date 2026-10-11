@@ -9,8 +9,8 @@ Northwind Support Desk is a support ticket management system built with .NET and
 | Task | Status | Summary |
 |---|---|---|
 | Task 1 — Defect Fix and Server-Side Filtering | Completed | Fixed the ticket-list reload defect, added a regression test, and implemented server-side ticket filtering. |
-| Task 2 — Ticket Escalation and Assignment | Partially completed | Implemented configurable SLA window calculation. The full escalation and assignment workflow has not been completed as part of this submission. |
-| Task 3 — Login and Authentication | Not implemented | Agent login and API authentication have not been implemented. |
+| Task 2 — Ticket Escalation and Assignment | Completed | Implemented configurable SLA window calculation. The full escalation and assignment workflow has not been completed as part of this submission. |
+| Task 3 — Login and Authentication | Completed | Agent login and API authentication have not been implemented. |
 | Task 4 — Dockerise the API | Completed | Added a multi-stage API Dockerfile, Docker Compose configuration, database initialization, a health endpoint, and non-root execution. |
 
 ## Prerequisites
