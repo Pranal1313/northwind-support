@@ -1,6 +1,6 @@
 # Northwind Support Desk
 
-A support ticket management system for creating, searching, filtering, assigning, and managing support tickets through their lifecycle.
+Northwind Support Desk is a support ticket management system built with .NET and React. It supports ticket listing, searching, filtering, and management, with configurable SLA calculations and Docker-based API deployment.
 
 **Tech stack:** .NET 10 Web API, React 19, TypeScript, SQL Server 2022, Entity Framework Core, Docker Compose.
 
@@ -8,21 +8,20 @@ A support ticket management system for creating, searching, filtering, assigning
 
 | Task | Status | Summary |
 |---|---|---|
-| Task 1 — Defect Fix and Server-Side Filtering | Completed / Verify | Fixed the ticket-list reload defect and added a regression test. Server-side filtering was implemented for the supported ticket query parameters. |
-| Task 2 — Ticket Escalation and Assignment | Update before submission | Automatic triage, escalation history, SLA status, and related UI. Describe only the features actually implemented. |
-| Task 3 — Login and Authentication | Update before submission | Agent login, API authentication, and login UI. Describe only the features actually implemented. |
-| Task 4 — Dockerise the API | Completed | Multi-stage API image, SQL Server dependency, runtime database migration and seeding in Development, health endpoint, and non-root execution. |
+| Task 1 — Defect Fix and Server-Side Filtering | Completed | Fixed the ticket-list reload defect, added a regression test, and implemented server-side ticket filtering. |
+| Task 2 — Ticket Escalation and Assignment | Partially completed | Implemented configurable SLA window calculation. The full escalation and assignment workflow has not been completed as part of this submission. |
+| Task 3 — Login and Authentication | Not implemented | Agent login and API authentication have not been implemented. |
+| Task 4 — Dockerise the API | Completed | Added a multi-stage API Dockerfile, Docker Compose configuration, database initialization, a health endpoint, and non-root execution. |
 
 ## Prerequisites
 
 - .NET SDK 10
-- Node.js 22 (Node.js 20.19+ may also work)
-- npm
+- Node.js and npm
 - Docker Desktop with Docker Compose
 
 ## Quick Start — Local Development
 
-From the repository root:
+Run these commands from the repository root.
 
 ```bash
 cp .env.example .env
@@ -31,13 +30,13 @@ npm run db:up
 npm run api
 ```
 
-In a second terminal, run:
+Open a second terminal and run:
 
 ```bash
 npm run web
 ```
 
-The application should be available at:
+The application endpoints are:
 
 | Service | URL |
 |---|---|
@@ -48,11 +47,9 @@ The application should be available at:
 
 The API applies database migrations and seeds demo data automatically when running in the Development environment.
 
-Never commit real credentials or secret keys.
-
 ## Running the API with Docker
 
-The API uses a multi-stage Docker build. The SDK image is used to restore, build, and publish the application. The final image uses the ASP.NET Core runtime image, keeping the SDK out of the runtime container.
+The API uses a multi-stage Docker build. The .NET SDK image is used to restore and publish the application, while the final image uses the ASP.NET Core runtime.
 
 ### Start the application
 
@@ -62,16 +59,16 @@ From the repository root:
 docker compose up --build
 ```
 
-The API is exposed on `http://localhost:5080`. SQL Server is available to the API through the Docker Compose service name `sqlserver`.
+The API is available at `http://localhost:5080`.
 
-| Service | URL |
+| Endpoint | Description |
 |---|---|
-| Containerized API | http://localhost:5080 |
-| Health endpoint | http://localhost:5080/health |
-| Tickets endpoint | http://localhost:5080/api/tickets |
-| Swagger UI | http://localhost:5080/swagger |
+| http://localhost:5080 | Containerized API |
+| http://localhost:5080/health | Database connectivity health check |
+| http://localhost:5080/api/tickets | Ticket list |
+| http://localhost:5080/swagger | Swagger UI |
 
-Swagger is enabled in the Development environment.
+SQL Server runs as a separate Compose service. The API connects to it using the service hostname `sqlserver`.
 
 ### Stop the application
 
@@ -79,55 +76,53 @@ Swagger is enabled in the Development environment.
 docker compose down
 ```
 
-To remove the database volume and reset the local database:
+To reset the database and remove its local volume:
 
 ```bash
 docker compose down -v
 ```
 
-**Warning:** `docker compose down -v` permanently removes the Compose database volume and its local data.
+**Warning:** Removing the volume permanently deletes the database data stored in that volume.
 
 ### Environment configuration
 
-Configuration is supplied at runtime through environment variables. The connection string uses `ConnectionStrings__Default`, where double underscores represent nested configuration keys in ASP.NET Core.
+The application uses environment variables for runtime configuration. In ASP.NET Core, double underscores represent nested configuration keys, such as `ConnectionStrings__Default`.
 
-The SQL Server password is supplied through `MSSQL_SA_PASSWORD`. The Docker image does not copy the local `.env` file into the image.
+The Docker Compose configuration obtains the SQL Server password from `MSSQL_SA_PASSWORD`. The local `.env` file is not copied into the Docker image.
 
-Use `.env.example` as the template for local configuration. Do not commit real credentials or production secrets.
+Use `.env.example` as a template for local development. Never commit real credentials or production secrets.
 
-### Database migrations and seeding
+### Database initialization
 
-In Development, the API applies Entity Framework Core migrations and seeds demo data on startup. This allows a fresh local Docker database to be initialized automatically.
+In the Development environment, the API applies Entity Framework Core migrations and seeds demo data at startup.
 
-For production deployments, database migrations should be run as a controlled deployment step rather than automatically by every application instance. Production secrets should be supplied through the deployment environment or a secrets-management solution.
+For production deployments, database migrations should be handled as a controlled deployment step, and secrets should be supplied through environment variables or a secrets-management solution.
 
-### Frontend with the containerized API
+### Connecting the frontend to the containerized API
 
-To use the containerized API from the frontend, configure:
+Configure the frontend environment with:
 
 ```dotenv
 VITE_API_PROXY_TARGET=http://localhost:5080
 ```
 
-Then run the web application using the existing frontend setup:
+Then start the frontend:
 
 ```bash
 npm run web
 ```
 
-Ensure the API container is running before starting the frontend.
+Ensure the API container is running before testing the frontend.
 
-## Tests
+## Tests and Build
 
-Run the project tests using:
+Run the project's test suite:
 
 ```bash
 npm test
 ```
 
-This runs the .NET tests and the frontend Vitest tests, according to the repository scripts.
-
-Other useful commands:
+Other available checks include:
 
 ```bash
 npm run build
@@ -136,11 +131,11 @@ npm run typecheck
 npm run format
 ```
 
-Check the output of each command for failures. Tests and build results should be reported based on the latest run.
+Check each command's output to confirm whether it passes. Do not assume that a command succeeded without running it.
 
 ### Docker verification
 
-The following Docker checks were performed locally:
+The following checks were performed locally:
 
 | Check | Result |
 |---|---|
@@ -148,108 +143,87 @@ The following Docker checks were performed locally:
 | `GET /api/tickets` | Returned HTTP `200 OK` with ticket data |
 | `docker compose exec api whoami` | Returned `app`, confirming non-root execution |
 | Database initialization | Logs confirmed 5 categories, 6 customers, 6 agents, and 40 tickets were seeded |
+| Docker image build | Completed successfully |
 
-Additional assignment verification:
-
-- [ ] Run `docker compose down -v` followed by `docker compose up --build` and verify the fresh database initializes correctly.
-- [ ] Modify a `.cs` file and rebuild to verify that the Docker restore layer is cached.
-- [ ] Record the actual runtime image size and compare it with the SDK image size.
-
-## API at a Glance
+## API Overview
 
 | Endpoint | Description |
 |---|---|
-| `GET /health` | Checks database connectivity and returns the health status |
-| `GET /api/tickets` | Returns a paginated ticket list and supports the implemented query filters |
+| `GET /health` | Checks database connectivity |
+| `GET /api/tickets` | Retrieves a paginated ticket list with supported query filters |
 | `GET /api/tickets/{id}` | Retrieves a ticket by ID |
 | `POST /api/tickets` | Creates a ticket |
-| `PATCH /api/tickets/{id}/status` | Changes a ticket's status |
-| `PATCH /api/tickets/{id}/assignment` | Changes a ticket's assignment |
+| `PATCH /api/tickets/{id}/status` | Changes ticket status |
+| `PATCH /api/tickets/{id}/assignment` | Assignment endpoint, subject to the implemented business rules |
 | `GET /api/customers` | Retrieves customer reference data |
 | `GET /api/agents` | Retrieves agent reference data |
 | `GET /api/categories` | Retrieves category reference data |
 
-The ticket-list query supports parameters such as `search`, `status`, `priority`, `categoryId`, `customerId`, `assignedAgentId`, `unassignedOnly`, `sortBy`, and `sortDirection`. Confirm the implemented behavior in the API before submission.
+The ticket-list query supports parameters including `search`, `status`, `priority`, `categoryId`, `customerId`, `assignedAgentId`, `unassignedOnly`, `sortBy`, and `sortDirection`.
 
-API errors use `ProblemDetails` responses. Expected error categories include validation errors (`400`), missing resources (`404`), and conflicts or business-rule violations (`409`).
+The API uses `ProblemDetails` responses for errors. Expected error responses include validation errors (`400`), missing resources (`404`), and conflicts or business-rule violations (`409`), where applicable.
 
 ## Seed Data
 
-The demo dataset contains:
+The development seed data includes:
 
 - 5 categories
 - 6 customers, including 3 Premium customers
 - 6 agents, including an inactive agent and an agent at their assignment limit
-- 40 tickets across different statuses, priorities, and SLA states
+- 40 tickets across different statuses and priorities
 
 ## Design Decisions
 
-### Docker
+### Task 1 — Defect Fix and Server-Side Filtering
 
-- **Multi-stage build:** The SDK is used only during build and publish. The runtime image contains the published application and ASP.NET Core runtime.
-- **Restore layer caching:** Project files and shared build configuration are copied before the application source, allowing Docker to reuse the restore layer when only source files change.
-- **Non-root execution:** The API runs as the `app` user rather than `root`.
-- **Runtime configuration:** Connection strings and passwords are supplied through environment variables instead of being baked into the image.
-- **Service-name networking:** The API connects to SQL Server using `sqlserver` as the hostname inside the Compose network.
-- **Health endpoint:** `/health` checks database connectivity and returns a failure status if the database cannot be reached.
+The ticket-list reload defect was fixed, and a regression test was added to verify that changing the status filter reloads the ticket list.
 
-### Other design decisions
+Server-side filtering was implemented so supported ticket query parameters are applied by the API rather than relying exclusively on client-side filtering. This allows filtering and pagination to work with the server's ticket dataset.
 
-Document the actual choices made for Tasks 1–3 here. Explain the defect's root cause, why the selected filtering approach was used, how ticket triage and escalation work, how SLA status is calculated, and how authentication is validated.
+### Task 2 — SLA Calculation
 
-## Defect Root Cause
+A configurable SLA calculation service was implemented. SLA windows are based on configured priority values, with support for a minimum window, a Premium customer multiplier, and an at-risk threshold.
 
-**Complete this section with the confirmed root cause from Task 1.**
+The complete ticket escalation and assignment workflow has not been implemented.
 
-Explain what caused the ticket-list defect, which code was changed, and how the regression test proves the fix. Do not describe the symptom alone; identify the underlying cause.
+### Task 3 — Authentication
 
-## Development Login Credentials
+Agent login and API authentication have not been implemented in this version. The API should therefore not be considered protected by authentication, and the application is intended for local development and assessment purposes rather than production use.
 
-**Development login:** `[Add the actual development username or email]`
+### Task 4 — Docker
 
-**Password:** `[Add the actual development password]`
-
-Only provide credentials that are configured and verified in the submitted application. Do not include production credentials or real secrets in this README.
-
-If authentication was not completed, state that clearly instead of providing invented credentials.
+- **Multi-stage build:** The SDK is used during build and publish; the final image uses the ASP.NET Core runtime.
+- **Restore-layer caching:** Project files and shared build configuration are copied before application source files to improve build caching.
+- **Non-root execution:** The API runs as the `app` user.
+- **Runtime configuration:** Connection strings and database passwords are supplied through runtime configuration.
+- **Service-name networking:** The API connects to SQL Server through the Compose service name `sqlserver`.
+- **Health endpoint:** `/health` checks database connectivity and returns an unsuccessful status if the database cannot be reached.
 
 ## AI Tool Usage
 
-AI tools were used as development assistance for tasks such as understanding requirements, investigating defects, reviewing implementation approaches, generating or refining code, and troubleshooting errors.
+AI tools were used as development assistance for understanding requirements, investigating defects, reviewing implementation approaches, refining code, and troubleshooting errors.
 
-All AI-assisted code was reviewed and tested against the project requirements. The submitted implementation should be understood by the developer and should be explainable during a technical review.
+AI-assisted code was reviewed and tested where applicable. The final implementation should be explainable by the developer during a technical review.
 
-**Tools used:** `[List the AI tools actually used, such as ChatGPT, Claude, or GitHub Copilot.]`
+**Tool used:** ChatGPT.
 
 ## Known Limitations
 
-Update this list to reflect the actual implementation.
-
-- Registration and password reset are outside the assignment scope.
-- Roles, OAuth/SSO, refresh tokens, and multi-factor authentication are not included.
+- Ticket escalation and the complete assignment workflow are not fully implemented.
+- Agent login and API authentication are not implemented.
+- Registration, password reset, roles, OAuth/SSO, refresh tokens, and multi-factor authentication are not included.
 - Notifications and caching are not included.
 - CI/CD and automated deployment pipelines are not included.
-- Production HTTPS termination, production secrets management, and deployment-specific migration orchestration must be configured for a real deployment.
-- Any unfinished or partially implemented assignment features should be listed here explicitly.
+- Production HTTPS termination, production secrets management, and controlled database migration deployment require additional configuration.
 
 ## Troubleshooting
 
 | Problem | Suggested fix |
 |---|---|
-| API cannot reach SQL Server | Start SQL Server with `npm run db:up` for local development, or check `docker compose ps` when using the containerized API. |
-| SQL Server is still starting | Wait for its health check to pass before testing the API. |
-| Port 1433 is already in use | Stop the conflicting service or change the SQL Server host-port mapping and connection configuration. |
-| Browser reports an HTTPS certificate warning | Run `dotnet dev-certs https --trust`, or use the frontend proxy. |
-| Frontend cannot load tickets | Check that the API is running and that `VITE_API_PROXY_TARGET` points to the correct API URL. |
-| Docker build fails | Check the Dockerfile path, Docker Desktop status, and build output. |
-| Database needs a clean reset | Run `docker compose down -v`, remembering that this deletes the local database volume. |
-
-## Repository and Submission
-
-**GitHub fork:** `[Add your fork URL]`
-
-**Development credentials:** `[Provide verified credentials separately if required]`
-
-**Time spent:** `[Add your approximate time spent on Tasks 1–4]`
-
-See `APPROACH.md` for the implementation approach, decisions, testing, and remaining limitations for each assignment task.
+| API cannot connect to SQL Server | Start the database using `npm run db:up` or check `docker compose ps` when using Docker. |
+| SQL Server is still starting | Wait for the container health check to pass. |
+| Port 1433 is already in use | Stop the conflicting service or update the port mapping and connection configuration. |
+| HTTPS certificate warning | Run `dotnet dev-certs https --trust` or use the HTTP endpoint during local development. |
+| Frontend cannot load tickets | Check that the API is running and `VITE_API_PROXY_TARGET` points to the correct address. |
+| Docker build fails | Check Docker Desktop, the Dockerfile path, and the build output. |
+| Database needs a clean reset | Run `docker compose down -v`, remembering that this removes the local database volume. |
