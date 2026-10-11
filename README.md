@@ -1,109 +1,255 @@
 # Northwind Support Desk
 
-A support ticket management system: raise tickets, search and filter them, assign them to agents,
-and move them through their lifecycle.
+A support ticket management system for creating, searching, filtering, assigning, and managing support tickets through their lifecycle.
 
-**.NET 10 Web API** + **React 19 / TypeScript** + **SQL Server**, in one monorepo.
+**Tech stack:** .NET 10 Web API, React 19, TypeScript, SQL Server 2022, Entity Framework Core, Docker Compose.
 
----
+## Assignment Tasks
 
-## The assignment
+| Task | Status | Summary |
+|---|---|---|
+| Task 1 — Defect Fix and Server-Side Filtering | Completed / Verify | Fixed the ticket-list reload defect and added a regression test. Server-side filtering was implemented for the supported ticket query parameters. |
+| Task 2 — Ticket Escalation and Assignment | Update before submission | Automatic triage, escalation history, SLA status, and related UI. Describe only the features actually implemented. |
+| Task 3 — Login and Authentication | Update before submission | Agent login, API authentication, and login UI. Describe only the features actually implemented. |
+| Task 4 — Dockerise the API | Completed | Multi-stage API image, SQL Server dependency, runtime database migration and seeding in Development, health endpoint, and non-root execution. |
 
-You are joining a team that already has this app working. Complete the tasks **in order**.
-Full requirements are in **[`ASSIGNMENT_CANDIDATE.md`](ASSIGNMENT_CANDIDATE.md)**.
+## Prerequisites
 
-| # | Task | Done looks like | Effort |
-| --- | --- | --- | --- |
-| 1 | **Fix a defect, add server-side filtering** | Root cause fixed with a regression test; every list filter applied in the database with a correct count | ~2.5 h |
-| 2 | **Ticket escalation & assignment** | Automatic triage on create, escalation with history, SLA status, UI for all of it | ~7 h |
-| 3 | **Login and authentication** | Agents sign in; API rejects unauthenticated calls; login UI | ~4 h |
-| 4 | **Dockerise the API** *(optional)* | `docker compose up` gives a migrated, seeded API with no baked-in secret | ~1.5 h |
+- .NET SDK 10
+- Node.js 22 (Node.js 20.19+ may also work)
+- npm
+- Docker Desktop with Docker Compose
 
-### Guidance
+## Quick Start — Local Development
 
-- **Time: 2 days.** Honestly marking a task "not finished" beats rushing all of them.
-- **Fork** this repo to your own GitHub account and work there. **Do not push to the original.**
-- **AI tools are allowed.** You must understand and be able to defend every line you submit.
-- **Commit as you go** and keep the real history. Commit the Task 1 defect fix and the filtering
-  separately from each other and from the feature work. A single squashed commit is not accepted.
-- **Where the spec is ambiguous**, make a decision, write it down in the README, and move on.
-- **Out of scope:** registration, password reset, roles, OAuth/SSO, refresh tokens, MFA,
-  notifications, CI, caching, visual redesign. Mention them under *Known limitations* instead.
-
-### Submission
-
-1. Update this **README** with what you built, your design decisions (chosen, rejected and why),
-   the defect's root cause, dev login credentials, how to run and test it, AI usage, and known
-   limitations. A reviewer must be able to run it without asking you anything.
-2. Add an **APPROACH.md** explaining your approach and thought process for each task.
-3. Commit both, then send us the **link to your fork**, the **dev login credentials**, and a
-   **rough note of time spent** on what. (If the fork is private, add the reviewers as collaborators.)
-
----
-
-## Quick start
-
-**Prerequisites:** .NET SDK 10 (`global.json`), Node.js 22 (`.nvmrc`; 20.19+ works), Docker.
+From the repository root:
 
 ```bash
-cp .env.example .env          # optional, every value has a working default
-npm install                   # installs the web app
-npm run db:up                 # SQL Server 2022 in Docker on localhost:1433
-npm run api                   # terminal 1: migrates, seeds, then serves the API
-npm run web                   # terminal 2: React dev server
+cp .env.example .env
+npm install
+npm run db:up
+npm run api
 ```
 
-| What | Where |
-| --- | --- |
-| Web app | http://localhost:5173 |
-| API | https://localhost:7043 (also http://localhost:5043) |
-| Swagger | https://localhost:7043/swagger |
+In a second terminal, run:
 
-In Development the API applies migrations and seeds demo data on startup. **Never commit real
-credentials.**
+```bash
+npm run web
+```
 
-**Visual Studio 2026:** run `npm run db:up`, open `SupportDesk.sln`, set
-**SupportDesk.Presentation** as the startup project, and press F5 on the **https** profile.
+The application should be available at:
+
+| Service | URL |
+|---|---|
+| Web application | http://localhost:5173 |
+| API | https://localhost:7043 |
+| API HTTP alternative | http://localhost:5043 |
+| Swagger UI | https://localhost:7043/swagger |
+
+The API applies database migrations and seeds demo data automatically when running in the Development environment.
+
+Never commit real credentials or secret keys.
+
+## Running the API with Docker
+
+The API uses a multi-stage Docker build. The SDK image is used to restore, build, and publish the application. The final image uses the ASP.NET Core runtime image, keeping the SDK out of the runtime container.
+
+### Start the application
+
+From the repository root:
+
+```bash
+docker compose up --build
+```
+
+The API is exposed on `http://localhost:5080`. SQL Server is available to the API through the Docker Compose service name `sqlserver`.
+
+| Service | URL |
+|---|---|
+| Containerized API | http://localhost:5080 |
+| Health endpoint | http://localhost:5080/health |
+| Tickets endpoint | http://localhost:5080/api/tickets |
+| Swagger UI | http://localhost:5080/swagger |
+
+Swagger is enabled in the Development environment.
+
+### Stop the application
+
+```bash
+docker compose down
+```
+
+To remove the database volume and reset the local database:
+
+```bash
+docker compose down -v
+```
+
+**Warning:** `docker compose down -v` permanently removes the Compose database volume and its local data.
+
+### Environment configuration
+
+Configuration is supplied at runtime through environment variables. The connection string uses `ConnectionStrings__Default`, where double underscores represent nested configuration keys in ASP.NET Core.
+
+The SQL Server password is supplied through `MSSQL_SA_PASSWORD`. The Docker image does not copy the local `.env` file into the image.
+
+Use `.env.example` as the template for local configuration. Do not commit real credentials or production secrets.
+
+### Database migrations and seeding
+
+In Development, the API applies Entity Framework Core migrations and seeds demo data on startup. This allows a fresh local Docker database to be initialized automatically.
+
+For production deployments, database migrations should be run as a controlled deployment step rather than automatically by every application instance. Production secrets should be supplied through the deployment environment or a secrets-management solution.
+
+### Frontend with the containerized API
+
+To use the containerized API from the frontend, configure:
+
+```dotenv
+VITE_API_PROXY_TARGET=http://localhost:5080
+```
+
+Then run the web application using the existing frontend setup:
+
+```bash
+npm run web
+```
+
+Ensure the API container is running before starting the frontend.
 
 ## Tests
 
+Run the project tests using:
+
 ```bash
-npm test                      # dotnet test, then the web tests (Vitest)
+npm test
 ```
 
-Both pass on a clean checkout and neither needs a database.
+This runs the .NET tests and the frontend Vitest tests, according to the repository scripts.
 
-## Commands
+Other useful commands:
 
-| Command | What it does |
-| --- | --- |
-| `npm run db:up` / `db:down` / `db:reset` | Start / stop / wipe SQL Server |
-| `npm run api` / `npm run web` | Run the API / the React app |
-| `npm run build` | Build both |
-| `npm run lint` / `typecheck` / `format` | Web lint and types / `dotnet format` |
-| `npm run ef -- migrations add <Name>` | Add an EF Core migration |
+```bash
+npm run build
+npm run lint
+npm run typecheck
+npm run format
+```
 
-## API at a glance
+Check the output of each command for failures. Tests and build results should be reported based on the latest run.
+
+### Docker verification
+
+The following Docker checks were performed locally:
+
+| Check | Result |
+|---|---|
+| `GET /health` | Returned `Healthy` |
+| `GET /api/tickets` | Returned HTTP `200 OK` with ticket data |
+| `docker compose exec api whoami` | Returned `app`, confirming non-root execution |
+| Database initialization | Logs confirmed 5 categories, 6 customers, 6 agents, and 40 tickets were seeded |
+
+Additional assignment verification:
+
+- [ ] Run `docker compose down -v` followed by `docker compose up --build` and verify the fresh database initializes correctly.
+- [ ] Modify a `.cs` file and rebuild to verify that the Docker restore layer is cached.
+- [ ] Record the actual runtime image size and compare it with the SDK image size.
+
+## API at a Glance
 
 | Endpoint | Description |
-| --- | --- |
-| `GET /api/tickets` | Paged list with `search`, `status`, `priority`, `categoryId`, `customerId`, `assignedAgentId`, `unassignedOnly`, `sortBy`, `sortDirection`. **Filters are accepted but not applied yet** (Task 1). |
-| `GET /api/tickets/{id}` | One ticket |
-| `POST /api/tickets` | Create a ticket |
-| `PATCH /api/tickets/{id}/status` · `/assignment` | Change status / assignee |
-| `GET /api/customers` · `/api/agents` · `/api/categories` | Reference data |
+|---|---|
+| `GET /health` | Checks database connectivity and returns the health status |
+| `GET /api/tickets` | Returns a paginated ticket list and supports the implemented query filters |
+| `GET /api/tickets/{id}` | Retrieves a ticket by ID |
+| `POST /api/tickets` | Creates a ticket |
+| `PATCH /api/tickets/{id}/status` | Changes a ticket's status |
+| `PATCH /api/tickets/{id}/assignment` | Changes a ticket's assignment |
+| `GET /api/customers` | Retrieves customer reference data |
+| `GET /api/agents` | Retrieves agent reference data |
+| `GET /api/categories` | Retrieves category reference data |
 
-Errors are `ProblemDetails`: `400` validation, `404` not found, `409` conflict or business rule.
+The ticket-list query supports parameters such as `search`, `status`, `priority`, `categoryId`, `customerId`, `assignedAgentId`, `unassignedOnly`, `sortBy`, and `sortDirection`. Confirm the implemented behavior in the API before submission.
 
-**Seed data:** 5 categories, 6 customers (3 Premium), 6 agents (one inactive, one at their limit)
-and 40 tickets across every status, priority and SLA state.
+API errors use `ProblemDetails` responses. Expected error categories include validation errors (`400`), missing resources (`404`), and conflicts or business-rule violations (`409`).
+
+## Seed Data
+
+The demo dataset contains:
+
+- 5 categories
+- 6 customers, including 3 Premium customers
+- 6 agents, including an inactive agent and an agent at their assignment limit
+- 40 tickets across different statuses, priorities, and SLA states
+
+## Design Decisions
+
+### Docker
+
+- **Multi-stage build:** The SDK is used only during build and publish. The runtime image contains the published application and ASP.NET Core runtime.
+- **Restore layer caching:** Project files and shared build configuration are copied before the application source, allowing Docker to reuse the restore layer when only source files change.
+- **Non-root execution:** The API runs as the `app` user rather than `root`.
+- **Runtime configuration:** Connection strings and passwords are supplied through environment variables instead of being baked into the image.
+- **Service-name networking:** The API connects to SQL Server using `sqlserver` as the hostname inside the Compose network.
+- **Health endpoint:** `/health` checks database connectivity and returns a failure status if the database cannot be reached.
+
+### Other design decisions
+
+Document the actual choices made for Tasks 1–3 here. Explain the defect's root cause, why the selected filtering approach was used, how ticket triage and escalation work, how SLA status is calculated, and how authentication is validated.
+
+## Defect Root Cause
+
+**Complete this section with the confirmed root cause from Task 1.**
+
+Explain what caused the ticket-list defect, which code was changed, and how the regression test proves the fix. Do not describe the symptom alone; identify the underlying cause.
+
+## Development Login Credentials
+
+**Development login:** `[Add the actual development username or email]`
+
+**Password:** `[Add the actual development password]`
+
+Only provide credentials that are configured and verified in the submitted application. Do not include production credentials or real secrets in this README.
+
+If authentication was not completed, state that clearly instead of providing invented credentials.
+
+## AI Tool Usage
+
+AI tools were used as development assistance for tasks such as understanding requirements, investigating defects, reviewing implementation approaches, generating or refining code, and troubleshooting errors.
+
+All AI-assisted code was reviewed and tested against the project requirements. The submitted implementation should be understood by the developer and should be explainable during a technical review.
+
+**Tools used:** `[List the AI tools actually used, such as ChatGPT, Claude, or GitHub Copilot.]`
+
+## Known Limitations
+
+Update this list to reflect the actual implementation.
+
+- Registration and password reset are outside the assignment scope.
+- Roles, OAuth/SSO, refresh tokens, and multi-factor authentication are not included.
+- Notifications and caching are not included.
+- CI/CD and automated deployment pipelines are not included.
+- Production HTTPS termination, production secrets management, and deployment-specific migration orchestration must be configured for a real deployment.
+- Any unfinished or partially implemented assignment features should be listed here explicitly.
 
 ## Troubleshooting
 
-| Symptom | Fix |
-| --- | --- |
-| API cannot reach the database | `npm run db:up`, wait ~20 s, check `docker compose ps` |
-| Port 1433 already in use | Change the port in `docker-compose.yml` and `.env` |
-| Browser warns about the certificate | `dotnet dev-certs https --trust`, or use the web app, which proxies |
-| Web app shows "Unable to load tickets" | The API is not running, or `VITE_API_PROXY_TARGET` points at the wrong port |
-| SQL Server slow on Apple Silicon | Enable Rosetta in Docker Desktop → Settings → General |
+| Problem | Suggested fix |
+|---|---|
+| API cannot reach SQL Server | Start SQL Server with `npm run db:up` for local development, or check `docker compose ps` when using the containerized API. |
+| SQL Server is still starting | Wait for its health check to pass before testing the API. |
+| Port 1433 is already in use | Stop the conflicting service or change the SQL Server host-port mapping and connection configuration. |
+| Browser reports an HTTPS certificate warning | Run `dotnet dev-certs https --trust`, or use the frontend proxy. |
+| Frontend cannot load tickets | Check that the API is running and that `VITE_API_PROXY_TARGET` points to the correct API URL. |
+| Docker build fails | Check the Dockerfile path, Docker Desktop status, and build output. |
+| Database needs a clean reset | Run `docker compose down -v`, remembering that this deletes the local database volume. |
+
+## Repository and Submission
+
+**GitHub fork:** `[Add your fork URL]`
+
+**Development credentials:** `[Provide verified credentials separately if required]`
+
+**Time spent:** `[Add your approximate time spent on Tasks 1–4]`
+
+See `APPROACH.md` for the implementation approach, decisions, testing, and remaining limitations for each assignment task.

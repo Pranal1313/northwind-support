@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using SupportDesk.Application;
 using SupportDesk.Infrastructure;
 using SupportDesk.Presentation.Extensions;
+using SupportDesk.Infrastructure.Data;
 using SupportDesk.Presentation.Filters;
 using SupportDesk.Presentation.Middleware;
 using SupportDesk.Application.Configuration;
@@ -65,7 +66,16 @@ if (app.Environment.IsDevelopment())
     // Keeps a developer machine one command away from a working database.
     await app.MigrateAndSeedAsync();
 }
+app.MapGet("/health", async (
+    SupportDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    var canConnect = await db.Database.CanConnectAsync(cancellationToken);
 
+    return canConnect
+        ? Results.Ok(new { status = "Healthy" })
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+}).AllowAnonymous();
 app.UseCors(FrontendCorsPolicy);
 
 app.MapControllers();
