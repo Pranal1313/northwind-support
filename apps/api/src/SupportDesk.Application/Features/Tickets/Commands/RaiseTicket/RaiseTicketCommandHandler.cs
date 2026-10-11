@@ -3,13 +3,15 @@ using SupportDesk.Application.Abstractions;
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Exceptions;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
+using SupportDesk.Application.Services;
+using SupportDesk.Domain.Aggregates.Categories;
 using SupportDesk.Domain.Aggregates.Tickets;
 using SupportDesk.Domain.Repositories;
 
 namespace SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 
 /// <summary>
-/// Raises a ticket for a customer.
+/// Raises a ticket for a customer and calculates its SLA deadline.
 /// </summary>
 public sealed class RaiseTicketCommandHandler(
     ITicketRepository tickets,
@@ -17,32 +19,46 @@ public sealed class RaiseTicketCommandHandler(
     ICategoryRepository categories,
     IUnitOfWork unitOfWork,
     IClock clock,
+    SlaWindowCalculator slaWindowCalculator,
     GetTicketQueryHandler getTicket,
     ILogger<RaiseTicketCommandHandler> logger)
 {
-    /// <exception cref="NotFoundException">The customer or the category does not exist.</exception>
-    public async Task<TicketDetailDto> HandleAsync(CreateTicketRequest request, CancellationToken ct)
+    /// <exception cref="NotFoundException">The customer or category does not exist.</exception>
+    public async Task<TicketDetailDto> HandleAsync(
+        CreateTicketRequest request,
+        CancellationToken ct)
     {
-        if (!await customers.ExistsAsync(request.CustomerId, ct))
+        var customer = await customers.GetByIdAsync(request.CustomerId, ct);
+
+        if (customer is null)
         {
             throw new NotFoundException("Customer", request.CustomerId);
         }
 
-        if (!await categories.ExistsAsync(request.CategoryId, ct))
+        var category = await categories.GetByIdAsync(request.CategoryId, ct);
+
+        if (category is null)
         {
             throw new NotFoundException("Category", request.CategoryId);
         }
 
-        // The response window is still worked out by hand by the team lead, so a new ticket
-        // starts with no due date and no owner.
+        var priority = category.ForcesCriticalPriority
+            ? TicketPriority.Critical
+            : request.RequestedPriority ?? TicketPriority.Medium;
+
+        var now = clock.UtcNow;
+
         var ticket = Ticket.Raise(
             await tickets.NextReferenceAsync(ct),
             request.Title,
             request.Description,
             request.CustomerId,
             request.CategoryId,
-            request.RequestedPriority ?? TicketPriority.Medium,
-            clock.UtcNow);
+            priority,
+            now);
+
+        var slaWindow = slaWindowCalculator.Calculate(priority, customer.Tier);
+        ticket.SetSlaDeadline(now.Add(slaWindow));
 
         await tickets.AddAsync(ticket, ct);
         await unitOfWork.SaveChangesAsync(ct);

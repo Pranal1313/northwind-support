@@ -4,6 +4,9 @@ using SupportDesk.Infrastructure;
 using SupportDesk.Presentation.Extensions;
 using SupportDesk.Presentation.Filters;
 using SupportDesk.Presentation.Middleware;
+using SupportDesk.Application.Configuration;
+using SupportDesk.Application.Services;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +29,26 @@ builder.Services.AddCors(options => options.AddPolicy(
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+
+builder.Services
+    .AddOptions<SlaOptions>()
+    .Bind(builder.Configuration.GetSection(SlaOptions.SectionName))
+    .Validate(
+        options => options.BaseWindowHours.Count > 0
+            && options.BaseWindowHours.Values.All(hours => hours > 0)
+            && options.MinimumWindowHours > 0
+            && options.PremiumCustomerMultiplier > 0
+            && options.PremiumCustomerMultiplier <= 1
+            && options.AtRiskThresholdPercent >= 0
+            && options.AtRiskThresholdPercent <= 100,
+        "SLA configuration contains invalid values.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton(sp =>
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SlaOptions>>().Value);
+
+builder.Services.AddSingleton<SlaWindowCalculator>();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);

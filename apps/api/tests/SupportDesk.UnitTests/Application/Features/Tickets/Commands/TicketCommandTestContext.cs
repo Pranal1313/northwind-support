@@ -1,11 +1,14 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using SupportDesk.Application.Abstractions;
+using SupportDesk.Application.Configuration;
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
 using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
+using SupportDesk.Application.Services;
 using SupportDesk.Domain.Aggregates.Agents;
+using SupportDesk.Domain.Aggregates.Categories;
 using SupportDesk.Domain.Aggregates.Customers;
 using SupportDesk.Domain.Aggregates.Tickets;
 using SupportDesk.Domain.Repositories;
@@ -24,8 +27,19 @@ internal sealed class TicketCommandTestContext
         Customers.Setup(c => c.ExistsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
+        Customers.Setup(c => c.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer(
+                "Contoso Ltd",
+                "support@contoso.example",
+                null,
+                CustomerTier.Premium,
+                Clock.UtcNow));
+
         Categories.Setup(c => c.ExistsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
+
+        Categories.Setup(c => c.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Category("General", false, false));
 
         Tickets.Setup(t => t.NextReferenceAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync("TCK-0041");
@@ -40,20 +54,40 @@ internal sealed class TicketCommandTestContext
             {
                 Id = 41,
                 Reference = "TCK-0041",
-                Customer = new CustomerContactDto(1, "Contoso Ltd", "support@contoso.example", null, CustomerTier.Premium),
+                Customer = new CustomerContactDto(
+                    1,
+                    "Contoso Ltd",
+                    "support@contoso.example",
+                    null,
+                    CustomerTier.Premium),
                 Category = new CategoryDto(1, "General", false)
             });
 
         var getTicket = new GetTicketQueryHandler(TicketQueries.Object);
+        var slaWindowCalculator = new SlaWindowCalculator(new SlaOptions());
 
         RaiseTicket = new RaiseTicketCommandHandler(
-            Tickets.Object, Customers.Object, Categories.Object, UnitOfWork.Object, Clock, getTicket,
+            Tickets.Object,
+            Customers.Object,
+            Categories.Object,
+            UnitOfWork.Object,
+            Clock,
+            slaWindowCalculator,
+            getTicket,
             NullLogger<RaiseTicketCommandHandler>.Instance);
 
-        ChangeTicketStatus = new ChangeTicketStatusCommandHandler(Tickets.Object, UnitOfWork.Object, Clock, getTicket);
+        ChangeTicketStatus = new ChangeTicketStatusCommandHandler(
+            Tickets.Object,
+            UnitOfWork.Object,
+            Clock,
+            getTicket);
 
         AssignTicket = new AssignTicketCommandHandler(
-            Tickets.Object, Agents.Object, UnitOfWork.Object, Clock, getTicket,
+            Tickets.Object,
+            Agents.Object,
+            UnitOfWork.Object,
+            Clock,
+            getTicket,
             NullLogger<AssignTicketCommandHandler>.Instance);
     }
 
@@ -98,7 +132,8 @@ internal sealed class TicketCommandTestContext
             agent.Deactivate();
         }
 
-        Agents.Setup(a => a.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(agent);
+        Agents.Setup(a => a.GetByIdAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(agent);
     }
 
     public void VerifySaved(Times times) =>

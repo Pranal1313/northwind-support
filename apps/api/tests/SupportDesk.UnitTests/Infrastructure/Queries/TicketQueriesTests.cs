@@ -1,5 +1,7 @@
+
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using SupportDesk.Application.Configuration;
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Domain.Aggregates.Agents;
 using SupportDesk.Domain.Aggregates.Categories;
@@ -22,7 +24,8 @@ public sealed class TicketQueriesTests
     {
         using var db = new TicketQueryDatabase();
 
-        var result = await db.Queries.GetPagedAsync(new TicketQuery(), CancellationToken.None);
+        var result = await db.Queries.GetPagedAsync(
+            new TicketQuery(), CancellationToken.None);
 
         Assert.Equal(5, result.TotalCount);
         Assert.Equal(5, result.Items.Count);
@@ -178,6 +181,7 @@ public sealed class TicketQueriesTests
         var trimmed = await db.Queries.GetPagedAsync(
             new TicketQuery { Search = "  Contoso  " },
             CancellationToken.None);
+
         var blank = await db.Queries.GetPagedAsync(
             new TicketQuery { Search = "   " },
             CancellationToken.None);
@@ -213,7 +217,11 @@ public sealed class TicketQueriesTests
         using var db = new TicketQueryDatabase();
 
         var result = await db.Queries.GetPagedAsync(
-            new TicketQuery { AssignedAgentId = db.Ada.Id, UnassignedOnly = true },
+            new TicketQuery
+            {
+                AssignedAgentId = db.Ada.Id,
+                UnassignedOnly = true
+            },
             CancellationToken.None);
 
         Assert.Equal(0, result.TotalCount);
@@ -226,7 +234,12 @@ public sealed class TicketQueriesTests
         using var db = new TicketQueryDatabase();
 
         var result = await db.Queries.GetPagedAsync(
-            new TicketQuery { Priority = TicketPriority.High, Page = 1, PageSize = 1 },
+            new TicketQuery
+            {
+                Priority = TicketPriority.High,
+                Page = 1,
+                PageSize = 1
+            },
             CancellationToken.None);
 
         Assert.Equal(2, result.TotalCount);
@@ -240,10 +253,18 @@ public sealed class TicketQueriesTests
         using var db = new TicketQueryDatabase();
 
         var result = await db.Queries.GetPagedAsync(
-            new TicketQuery { CustomerId = db.Contoso.Id, SortBy = "createdAtUtc", SortDirection = "desc" },
+            new TicketQuery
+            {
+                CustomerId = db.Contoso.Id,
+                SortBy = "createdAtUtc",
+                SortDirection = "desc"
+            },
             CancellationToken.None);
 
-        Assert.Equal(new[] { db.Printer.Id, db.Vpn.Id, db.Invoice.Id }, result.Items.Select(item => item.Id));
+        Assert.Equal(
+            new[] { db.Printer.Id, db.Vpn.Id, db.Invoice.Id },
+            result.Items.Select(item => item.Id));
+
         Assert.Equal(SlaStatus.NotApplicable, result.Items[0].SlaStatus);
     }
 
@@ -268,7 +289,11 @@ public sealed class TicketQueriesTests
             Db = new SqliteCompatibleSupportDbContext(options);
             Db.Database.EnsureCreated();
 
-            Queries = new TicketQueries(Db, new FixedClock());
+            Queries = new TicketQueries(
+                Db,
+                new FixedClock(),
+                new SlaOptions());
+
             Seed();
         }
 
@@ -308,10 +333,30 @@ public sealed class TicketQueriesTests
         {
             var now = FixedClock.DefaultNow;
 
-            Billing = new Category("Billing", requiresSpecialist: false, forcesCriticalPriority: false);
-            Outage = new Category("Outage", requiresSpecialist: true, forcesCriticalPriority: true);
-            Contoso = new Customer("Contoso Ltd", "ops@contoso.test", null, CustomerTier.Premium, now);
-            Northwind = new Customer("Northwind Traders", "help@northwind.test", null, CustomerTier.Standard, now);
+            Billing = new Category(
+                "Billing",
+                requiresSpecialist: false,
+                forcesCriticalPriority: false);
+
+            Outage = new Category(
+                "Outage",
+                requiresSpecialist: true,
+                forcesCriticalPriority: true);
+
+            Contoso = new Customer(
+                "Contoso Ltd",
+                "ops@contoso.test",
+                null,
+                CustomerTier.Premium,
+                now);
+
+            Northwind = new Customer(
+                "Northwind Traders",
+                "help@northwind.test",
+                null,
+                CustomerTier.Standard,
+                now);
+
             Ada = new Agent("Ada Lovelace", "ada@support.test", 10, now);
             Linus = new Agent("Linus Torvalds", "linus@support.test", 10, now);
 
@@ -320,22 +365,38 @@ public sealed class TicketQueriesTests
             Db.Set<Agent>().AddRange(Ada, Linus);
             Db.SaveChanges();
 
-            Invoice = Raise("TCK-0001", "Cannot print invoice", Contoso.Id, Billing.Id, TicketPriority.High, now);
-            Vpn = Raise("TCK-0002", "VPN is down", Contoso.Id, Outage.Id, TicketPriority.Medium, now.AddMinutes(1));
+            Invoice = Raise(
+                "TCK-0001", "Cannot print invoice", Contoso.Id,
+                Billing.Id, TicketPriority.High, now);
+
+            Vpn = Raise(
+                "TCK-0002", "VPN is down", Contoso.Id,
+                Outage.Id, TicketPriority.Medium, now.AddMinutes(1));
+
             Vpn.AssignTo(Ada.Id, now.AddMinutes(1));
             Vpn.ChangeStatus(TicketStatus.Open, now.AddMinutes(1));
 
-            WrongAmount = Raise("TCK-0003", "Wrong amount charged", Northwind.Id, Billing.Id, TicketPriority.High, now.AddMinutes(2));
+            WrongAmount = Raise(
+                "TCK-0003", "Wrong amount charged", Northwind.Id,
+                Billing.Id, TicketPriority.High, now.AddMinutes(2));
+
             WrongAmount.AssignTo(Linus.Id, now.AddMinutes(2));
             WrongAmount.ChangeStatus(TicketStatus.InProgress, now.AddMinutes(2));
 
-            Website = Raise("TCK-0004", "Website timeout", Northwind.Id, Outage.Id, TicketPriority.Low, now.AddMinutes(3));
+            Website = Raise(
+                "TCK-0004", "Website timeout", Northwind.Id,
+                Outage.Id, TicketPriority.Low, now.AddMinutes(3));
 
-            Printer = Raise("TCK-0005", "Printer jam in accounts", Contoso.Id, Billing.Id, TicketPriority.Low, now.AddMinutes(4));
+            Printer = Raise(
+                "TCK-0005", "Printer jam in accounts", Contoso.Id,
+                Billing.Id, TicketPriority.Low, now.AddMinutes(4));
+
             Printer.AssignTo(Linus.Id, now.AddMinutes(4));
             Printer.ChangeStatus(TicketStatus.Resolved, now.AddMinutes(4));
 
-            Db.Set<Ticket>().AddRange(Invoice, Vpn, WrongAmount, Website, Printer);
+            Db.Set<Ticket>().AddRange(
+                Invoice, Vpn, WrongAmount, Website, Printer);
+
             Db.SaveChanges();
         }
 
@@ -360,14 +421,17 @@ public sealed class TicketQueriesTests
     /// The production model stores included columns on two indexes (SQL Server INCLUDE).
     /// SQLite has no equivalent, so those annotations are cleared before the schema is created.
     /// </summary>
-    private sealed class SqliteCompatibleSupportDbContext(DbContextOptions<SupportDbContext> options)
+    private sealed class SqliteCompatibleSupportDbContext(
+        DbContextOptions<SupportDbContext> options)
         : SupportDbContext(options)
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            foreach (var index in modelBuilder.Model.GetEntityTypes().SelectMany(type => type.GetIndexes()))
+            foreach (var index in modelBuilder.Model
+                         .GetEntityTypes()
+                         .SelectMany(type => type.GetIndexes()))
             {
                 index.SetAnnotation("SqlServer:Include", null);
             }

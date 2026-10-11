@@ -80,6 +80,21 @@ public sealed class Ticket : AggregateRoot
     }
 
     /// <summary>
+    /// Sets the SLA deadline for this ticket.
+    /// </summary>
+    public void SetSlaDeadline(DateTime dueAtUtc)
+    {
+        if (dueAtUtc < CreatedAtUtc)
+        {
+            throw new ArgumentException(
+                "The SLA deadline cannot be before the ticket was created.",
+                nameof(dueAtUtc));
+        }
+
+        DueAtUtc = dueAtUtc;
+    }
+
+    /// <summary>
     /// Moves the ticket through its lifecycle, keeping the resolution timestamp in step.
     /// </summary>
     /// <exception cref="BusinessRuleViolationException">The ticket is closed.</exception>
